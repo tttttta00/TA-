@@ -1,0 +1,212 @@
+Shader "Unlit/NewUnlitShader"
+{
+    //材质参数面板
+    Properties
+    {
+        _MainTex ("Texture", 2D) = "white" {}
+        _NoiseTex ("噪音贴图", 2D) = "white" {}
+        _MaskTex ("遮罩贴图", 2D) = "white" {}
+        _Color("color",Color)=(1,1,1,0)
+        [HDR]_Hdrcolor("HDR Color", Color)=(0,0,1,0)
+        _Value("数值",Float)=0.5
+        _FrenelScale("FrenelScale",Float)=1
+        _FrenelPower("FrenelPower",Float)=1
+        _NoiseColor("zaoyin",Float)=0.5
+        _MaskSpeed("zhezhao",range(-1,1))=1
+        _RangeValue("范围",range(0,1))=0.7
+        _Vec("向量",Vector)=(1,1,1,0)
+        _Alpha("Alpha",range(0,1))=0.5
+        _Mip("Mip",Float)=0.5
+        _Amount("强度",Float)=0.5
+        
+        
+        [Toggle] _EnableX("Active x axis",float)=1
+        [Toggle] _EnableY("Active Y axis",float)=0
+        [Toggle] _EnableZ("Active Z axis",float)=0
+        
+    }
+    SubShader
+    {
+        Tags
+        {
+            "Queue" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Geometry"
+        }
+ 
+        
+
+        Pass
+        {
+            //颜色叠加混合（相乘）
+            
+            
+            CGPROGRAM
+            //编译指令
+            #pragma vertex vert
+            #pragma fragment frag
+            // make fog work
+            #pragma multi_compile_fog
+
+            //头文件
+            #include "UnityCG.cginc"
+
+            //cpu发送给VS的数据
+            struct MeshData
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+                float4 NormalOS:Normal;
+               
+                
+                
+            };
+
+
+            //VS发给PS的数据
+
+            struct VS2PSData
+            {
+                float2 uv      :TEXCOORD0;
+              
+                float4 posCS     :SV_POSITION;
+                float3 NormalOS:TEXCOORD1;
+                float3 NormalWS:TEXCOORD2;
+                float3 posOS   :TEXCOORD3;
+                float3 posWS   :TEXCOORD4;
+                
+            };
+
+            //声明变量
+
+            sampler2D _MainTex;
+            sampler2D _NoiseTex;
+            sampler2D _MaskTex;
+            float4 _MaskTex_ST;
+            float4 _MainTex_ST;
+            float _Value;
+            float _FrenelScale;
+            float _FrenelPower;
+            float _Amount;
+            float _Mip;
+            float _NoiseColor;
+            
+            float _MaskSpeed;
+            float _EnableDirColor;
+            float _EnableX,_EnableY,_EnableZ;
+
+            //噪音函数  GlitchNoise
+            float4 GlitchNoise(float2 uv)
+            {
+                float4 c = float4(uv, 0, 1);
+                float4 d;
+                float4 e;
+                for (int j = 16; j > 0; j--)
+                {
+                    e = floor(c);
+                    d += sin(e * e.yxyx + e * (_Time / 10));
+                    c *= 2.5;
+                }
+                float4 glitch_res = d;
+                return glitch_res;
+            }
+            #define MaskSpeed _Time.x*_MaskSpeed*30;
+
+            float4 GetMask(float2 uv)
+            {
+                float MaskTime=MaskSpeed;
+                float S_offect=sin(MaskTime * 2)+ 1;
+                float C_Tiling=cos(MaskTime * 2);
+                 float4 Mask = tex2Dlod(_MaskTex, float4(uv * float2(_MaskTex_ST.y, _MaskTex_ST.y * C_Tiling) + float2(_MaskTex_ST.z, _MaskTex_ST.w * S_offect), 0, 0));
+                //float4 Mask = tex2Dlod(_MaskTex, float4(uv * float2(_MaskTex_ST.y, _MaskTex_ST.y * C_Tiling) + float2(_MaskTex_ST.z, _MaskTex_ST.w * S_offect), 0, 0));
+                return Mask;
+            }
+
+
+
+
+            VS2PSData vert (MeshData input)
+            {
+                VS2PSData output;
+                
+                            
+               /*float4 Mask = GetMask(input.uv);
+                float4 glitchNoise = GlitchNoise(input.uv.xy)*0.002 * Mask.x;
+                
+                float3 Direction = float3(_EnableX,_EnableY, _EnableZ);
+                //根据噪音 做顶点偏移 顶点动画
+                input.vertex.xyz += glitchNoise.xyz * Direction * input.NormalOS.xyz * 10*_Amount;
+
+                output.posCS = UnityObjectToClipPos(input.vertex);
+
+                //将UV从vs传入到PS
+                output.uv = input.uv;
+                output.posWS =mul(unity_ObjectToWorld, input.vertex).xyz;
+
+                //将法线从局部空间变换到世界空间，需要乘上 逆转矩阵
+                output.NormalWS = UnityObjectToWorldNormal(input.NormalOS);
+
+                return output;*/
+
+
+
+
+                float4 Mask=GetMask(input. uv);
+                float3 Direction=float3 (_EnableX,_EnableY,_EnableZ);
+                float4 Nosize=GlitchNoise(input. uv)*0.002*Mask.x;
+                input.vertex.xyz+=Nosize.xyz*Direction*Mask*input.NormalOS.xyz*1*_Value;
+
+
+                //将UV从vs传入到PS
+                output.uv=input.uv;
+                output.NormalOS= input .NormalOS;
+                output.posCS=UnityObjectToClipPos(input.vertex);
+                output.posWS=mul(unity_ObjectToWorld,input.vertex);
+                output.NormalWS=UnityObjectToWorldNormal(input.NormalOS);
+
+                return output;
+                
+            }
+            float3 HSVToRGB( float3 c )
+			{
+				float4 K = float4( 1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0 );
+				float3 p = abs( frac( c.xxx + K.xyz ) * 6.0 - K.www );
+				return c.z * lerp( K.xxx, saturate( p - K.xxx ), c.y );
+			}
+
+            
+
+            float4 frag (VS2PSData input) : SV_Target
+            {
+
+                float4 Mask=GetMask(input. uv);
+                float4 Nosize=GlitchNoise(input. uv)*0.002*Mask.x;
+                float4 BaseMap=tex2D(_MainTex,input. uv);
+                float4 NoiseMap=tex2D(_NoiseTex,input. uv);
+                float3 Direction=float3 (_EnableX,_EnableY,_EnableZ);
+                float3 V=normalize(input.posWS-_WorldSpaceCameraPos.xyz);
+                float3 N=normalize(input.NormalWS);
+
+                float frenel=pow(dot(V,N)+_FrenelScale,_FrenelPower);
+                //float frenel=dot(V,N);
+                float3 glitchColor = HSVToRGB(float3 (frac(input.posWS.x),1,0.5)).xyzz;
+                float3 frenelColor=saturate(frenel*glitchColor*_Amount);
+
+
+
+                float GlitchNoise_A=saturate(abs(input.NormalOS.x)-0.5);
+               
+                float3 GlitchNoise_Color=Nosize.xyz*Mask.x*GlitchNoise_A*_NoiseColor*input.NormalWS;
+                float4 FinalGlitchNoise_Color=GlitchNoise_Color.xyzz*float4(1,1,1,0);
+                
+              
+                float4 FinalColor=GlitchNoise_Color.xyzz*float4(1,1,1,0)+frenelColor.xyzz+BaseMap;
+               //return GlitchNoise_A;
+                return FinalColor;
+                //return float4(1,0,0,_Alpha);
+                //float4 col = tex2D(_MainTex, input.uv*_MainTex_ST.xy+_MainTex_ST.zw);
+                
+                //return col;
+            }
+            ENDCG
+        }
+    }
+}
