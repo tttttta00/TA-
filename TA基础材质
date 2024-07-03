@@ -1,0 +1,106 @@
+Shader "Unlit/NewUnlitShader"
+{
+    //材质参数面板
+    Properties
+    {
+        _MainTex ("Texture", 2D) = "white" {}
+        _NoiseTex ("noiseTexture", 2D) = "white" {}
+        _Color("color",Color)=(1,1,1,0)
+        [HDR]_Hdrcolor("HDR Color", Color)=(0,0,1,0)
+        _Value("数值",Float)=0.5
+        _RangeValue("范围",range(0,1))=0.7
+        _Vec("向量",Vector)=(1,1,1,0)
+        _Alpha("Alpha",range(0,1))=0.5
+        _Mip("Mip",Float)=0.5
+        
+    }
+    SubShader
+    {
+        Tags { "RenderType"="Opaque""Queue"="Geometry" }
+        //半透明渲染队列为3000
+        //Tags { "RenderType"="Opaque""Queue"="Transprent" }
+        
+
+        Pass
+        {
+            //颜色叠加混合（相乘）
+            Blend one one
+            Blend SrcAlpha OneMinusSrcAlpha
+            
+            CGPROGRAM
+            //编译指令
+            #pragma vertex vert
+            #pragma fragment frag
+            // make fog work
+            #pragma multi_compile_fog
+
+            //头文件
+            #include "UnityCG.cginc"
+
+            //cpu发送给VS的数据
+            struct MeshData
+            {
+                float4 posOS : POSITION;
+                float2 uv2 : TEXCOORD0;
+                float4 NormalOS:Normal;
+               
+                
+                
+            };
+
+
+            //VS发给PS的数据
+
+            struct VS2PSData
+            {
+                float2 uv2      :TEXCOORD0;
+              
+                float4 posCS  :SV_POSITION;
+                float3 NormalOS:TEXCOORD1;
+                float3 NormalWS:TEXCOORD2;
+                float3 posOS   :TEXCOORD3;
+                float3 posWS   :TEXCOORD4;
+                
+            };
+
+            //声明变量
+
+            sampler2D _MainTex;
+            sampler2D _NoiseTex;
+            float4 _MainTex_ST;
+            float _Value;
+            float _Alpha;
+            float _Mip;
+            
+
+            VS2PSData vert (MeshData input)
+            {
+                VS2PSData output;
+                //output.posCS = UnityObjectToClipPos(input.posOS);
+                output.uv2 = input.uv2;
+                output.NormalWS = UnityObjectToWorldNormal(input.NormalOS);
+                output.NormalOS=input.NormalOS;
+                output.posOS=input.posOS;
+                output.posWS=mul(unity_ObjectToWorld,input.posOS);
+                float4 col=tex2Dlod(_MainTex,float4(input.uv2,_Mip,_Mip));
+                //output.posWS.x+=sin(_Time*50)*col.r*0.1;
+                float3 posWS =output.posWS;
+
+                posWS.y+=col.r;
+                output.posCS = mul(UNITY_MATRIX_VP,float4 (posWS,1));
+               
+                return output;
+            }
+            
+
+            float4 frag (VS2PSData output) : SV_Target
+            {
+                //return float4(1,0,0,_Alpha);
+                float4 col = tex2Dlod(_MainTex, float4(output.uv2,_Mip,_Mip));
+                
+                return col;
+            }
+            ENDCG
+        }
+    }
+}
