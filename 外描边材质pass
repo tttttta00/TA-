@@ -1,0 +1,44 @@
+ //Outline Pass
+        
+        //参数声明  
+        //_OulineScale("描边粗细",Float) =1
+       // _OutlineColor ("描边颜色",Color) = (0,0,0,0)
+        Pass //"OutLine"
+        {
+            Name "TANGENT"
+            Cull Front
+            
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+
+            #include "UnityCG.cginc"
+          
+            struct MeshData
+            {
+                float4 vertex : POSITION;
+                float4 vertexColor : COLOR;
+                float4 tangent :TANGENT; //tangent 里存储的是编辑后的平滑法线，手动编辑
+                float4 normal : NORMAL;
+            };
+
+            struct V2FData
+            {
+                float4 pos : SV_POSITION; 
+            };
+
+            float _OulineScale;
+            float4 _OutlineColor;
+            V2FData vert(MeshData v)
+            {
+                V2FData o;
+                v.vertex.xyz += v.tangent.xyz *_OulineScale*0.01 *v.vertexColor.a ; //用顶点色的alpha通道控制描边粗细
+                o.pos = UnityObjectToClipPos(v.vertex);
+                return o;
+            }
+            float4 frag(V2FData i) : SV_Target
+            { 
+                return _OutlineColor;
+            }
+            ENDCG
+        }
